@@ -74,9 +74,6 @@ def get_m3u8_url(channel_url, referer):
         params_str = match.group(1).strip()
         
         try:
-            # The parameters are not always standard JSON, so we need a more flexible parsing
-            # This regex is designed to capture the main components of the eval call
-            # It's looking for the large encoded string, and the numeric parameters
             params_match = re.search(r'([\'"])((?:(?!\1).)*)\1,\s*\d+,\s*([\'"])((?:(?!\3).)*)\3,\s*(\d+),\s*(\d+),.*\s*(\d+)', params_str, re.DOTALL)
             if not params_match:
                  print(f"Could not parse parameters from: {params_str}")
@@ -93,14 +90,12 @@ def get_m3u8_url(channel_url, referer):
 
         deobfuscated_code = deobfuscate(h, n, t, e)
         
-        # 1. Find the player source variable name
         src_match = re.search(r"src:\s*([\w\d]+)", deobfuscated_code)
         if not src_match:
             print(f"Could not find player source variable in {channel_url}")
             return None
         src_variable_name = src_match.group(1)
 
-        # 2. Find the line that assigns this variable
         assignment_regex = r"const\s+" + re.escape(src_variable_name) + r"\s*=\s*(.*?);"
         assignment_match = re.search(assignment_regex, deobfuscated_code)
         if not assignment_match:
@@ -108,7 +103,6 @@ def get_m3u8_url(channel_url, referer):
             return None
         assignment_line = assignment_match.group(1)
 
-        # 3. Dynamically find the decoder function name and extract parts
         decoder_func_match = re.search(r"function\s+([a-zA-Z0-9_]+)\(str\)", deobfuscated_code)
         if not decoder_func_match:
             print(f"Could not find decoder function in {channel_url}")
@@ -118,7 +112,6 @@ def get_m3u8_url(channel_url, referer):
         parts_vars_regex = re.escape(decoder_func_name) + r"\((\w+)\)"
         parts_vars = re.findall(parts_vars_regex, assignment_line)
 
-        # 4. Create a dictionary of all the `const` variable assignments
         const_declarations = re.findall(r"const\s+(\w+)\s+=\s+'([^']+)';", deobfuscated_code)
         parts_dict = {match[0]: match[1] for match in const_declarations}
 
@@ -126,14 +119,12 @@ def get_m3u8_url(channel_url, referer):
              print(f"Could not extract parts variables from assignment line in {channel_url}")
              return None
 
-        # 5. Look up the base64 strings
         try:
             url_parts_b64 = [parts_dict[var_name] for var_name in parts_vars]
         except KeyError as e:
             print(f"Could not find const value for variable {e} in {channel_url}")
             return None
 
-        # 6. Decode and concatenate
         decoded_parts = [LEUlrDBkdbMl(part) for part in url_parts_b64]
         final_url = "".join(decoded_parts)
         return final_url
@@ -156,10 +147,10 @@ channels_data = [
 ]
 
 with open("siamcdnplaylist.m3u", "w") as f:
-    f.write("#EXTM3U\n")
+    f.write('#EXTM3U x-tvg-url="https://github.com/epgshare01/share/raw/master/epg_ripper_ALL_SOURCES1.xml.gz"\n')
     for channel in channels_data:
         print(f"Processing {channel['name']}...")
-        m3u8_url = get_m3u8_url(channel['url'], channel['url'])
+        m3u8_url = get_m3u8_url(channel['url'], 'https://edge.cdn-live.ru/')
         if m3u8_url:
             name = channel['name']
             code = channel['code']
