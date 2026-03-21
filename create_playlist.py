@@ -136,28 +136,49 @@ def get_m3u8_url(channel_url, referer):
         print(f"An error occurred while processing {channel_url}: {ex}")
         return None
 
-channels_data = [
-    {"name":"ABC","code":"us","url":"https://cdn-live.tv/api/v1/channels/player/?name=abc&code=us&user=cdnlivetv&plan=free","image":"https://api.cdn-live.tv/api/v1/channels/images6318/united-states/abc.png","status":"online","viewers":0},
-    {"name":"ACC Network","code":"us","url":"https://cdn-live.tv/api/v1/channels/player/?name=acc+network&code=us&user=cdnlivetv&plan=free","image":"https://api.cdn-live.tv/api/v1/channels/images6318/united-states/acc-network.png","status":"online","viewers":0},
-    {"name":"Astro Cricket","code":"us","url":"https://cdn-live.tv/api/v1/channels/player/?name=astro+cricket&code=us&user=cdnlivetv&plan=free","image":"https://api.cdn-live.tv/api/v1/channels/images6318/united-states/astro-cricket.webp","status":"online","viewers":0},
-    {"name":"Astro Football","code":"us","url":"https://cdn-live.tv/api/v1/channels/player/?name=astro+football&code=us&user=cdnlivetv&plan=free","image":"https://api.cdn-live.tv/api/v1/channels/images6318/united-states/astro-football.webp","status":"online","viewers":0},
-    {"name":"Astro Grandstand","code":"us","url":"https://cdn-live.tv/api/v1/channels/player/?name=astro+grandstand&code=us&user=cdnlivetv&plan=free","image":"https://api.cdn-live.tv/api/v1/channels/images6318/united-states/astro-grandstand.webp","status":"online","viewers":0},
-    {"name":"Astro Premier League","code":"us","url":"https://cdn-live.tv/api/v1/channels/player/?name=astro+premier+league&code=us&user=cdnlivetv&plan=free","image":"https://api.cdn-live.tv/api/v1/channels/images6318/united-states/astro-premier-league.webp","status":"online","viewers":0},
-    {"name":"Astro Premier League 2","code":"us","url":"https://cdn-live.tv/api/v1/channels/player/?name=astro+premier+league+2&code=us&user=cdnlivetv&plan=free","image":"https://api.cdn-live.tv/api/v1/channels/images6318/united-states/astro-premier-league-2.webp","status":"online","viewers":0}
-]
+def get_online_channels(referer):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36",
+        "Referer": referer
+    }
+    try:
+        response = requests.get("https://api.cdn-live.tv/api/v1/channels/?user=cdnlivetv&plan=free", headers=headers)
+        response.raise_for_status()
+        # The response is a dictionary, and the channel list is inside the 'channels' key.
+        all_channels = response.json().get('channels', []) 
+        online_channels = [ch for ch in all_channels if ch.get('status') == 'online']
+        return online_channels
+    except requests.exceptions.RequestException as req_err:
+        print(f"Error fetching channel list: {req_err}")
+        return []
+    except json.JSONDecodeError as json_err:
+        print(f"Error decoding channel list JSON: {json_err}")
+        return []
+
 referer_url = "https://edge.cdn-live.ru/"
+channels_data = get_online_channels(referer_url)
 
-with open("siamcdnplaylist.m3u", "w") as f:
-    f.write('#EXTM3U x-tvg-url="https://github.com/epgshare01/share/raw/master/epg_ripper_ALL_SOURCES1.xml.gz"\n')
-    for channel in channels_data:
-        print(f"Processing {channel['name']}...")
-        m3u8_url = get_m3u8_url(channel['url'], referer_url)
-        if m3u8_url:
-            name = channel['name']
-            code = channel['code']
-            logo = channel['image']
-            f.write(f'#EXTINF:-1 tvg-id="{code}" tvg-name="{name}" tvg-logo="{logo}",{name}\n')
-            f.write(f'#EXTVLCOPT:http-referrer={referer_url}\n')
-            f.write(f"{m3u8_url}\n")
+if channels_data:
+    with open("siamcdnplaylist.m3u", "w", encoding='utf-8') as f:
+        f.write('#EXTM3U x-tvg-url="https://github.com/epgshare01/share/raw/master/epg_ripper_ALL_SOURCES1.xml.gz"\n')
+        for channel in channels_data:
+            print(f"Processing {channel.get('name')}...")
+            # The 'url' in the channel data is the player page, not the stream URL itself
+            player_page_url = channel.get('url')
+            if not player_page_url:
+                print(f"Skipping {channel.get('name')} due to missing URL.")
+                continue
+                
+            m3u8_url = get_m3u8_url(player_page_url, referer_url)
+            
+            if m3u8_url:
+                name = channel.get('name')
+                code = channel.get('code')
+                logo = channel.get('image')
+                f.write(f'#EXTINF:-1 tvg-id="{code}" tvg-name="{name}" tvg-logo="{logo}",{name}\n')
+                f.write(f'#EXTVLCOPT:http-referrer={referer_url}\n')
+                f.write(f"{m3u8_url}\n")
 
-print("Playlist created successfully.")
+    print("Playlist created successfully.")
+else:
+    print("No online channels found or an error occurred. Playlist not updated.")
