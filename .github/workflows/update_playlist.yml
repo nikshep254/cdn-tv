@@ -1,36 +1,46 @@
-
 name: Update M3U Playlist
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: '*/10 * * * *'   # every 10 min
   workflow_dispatch:
 
 jobs:
   update-playlist:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+
     permissions:
       contents: write
+
+    concurrency:
+      group: playlist-update
+      cancel-in-progress: true
+
     steps:
       - name: Check out repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.x'
 
       - name: Install dependencies
-        run: |
-          pip install requests
+        run: pip install requests
 
-      - name: Run script
-        run: python create_playlist.py
+      - name: Run script (with retry)
+        run: |
+          for i in 1 2 3; do
+            python create_playlist.py && break
+            echo "Retry $i..."
+            sleep 10
+          done
 
       - name: Commit and push changes
         run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
           git add siamcdnplaylist.m3u
-          git commit -m "Update siamcdnplaylist.m3u" || echo "No changes to commit"
+          git commit -m "Auto update playlist" || echo "No changes"
           git push
